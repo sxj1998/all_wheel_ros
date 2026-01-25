@@ -22,8 +22,8 @@ using namespace std::chrono_literals;
 using std::placeholders::_1;
 using namespace std;
 
-#define WHEEL_RADIUS        0.03
-#define ROBOT_RADIUS        0.088
+#define WHEEL_RADIUS        0.035115
+#define ROBOT_RADIUS        0.0990025403784439
 class OmniKinematics : public rclcpp::Node
 {
 public:
@@ -121,7 +121,7 @@ private:
   }
 
   void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg) {
-    Eigen::VectorXd M = calculate_motor_speed(msg->linear.x, msg->linear.y, msg->angular.z);
+    Eigen::VectorXd M = calculate_motor_speed(msg->linear.x, msg->linear.y, -msg->angular.z);
     set_motor_speed(M);
   }
 
