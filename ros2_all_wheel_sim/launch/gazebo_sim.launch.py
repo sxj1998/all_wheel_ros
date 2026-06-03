@@ -2,6 +2,7 @@ import os  # 读取环境变量
 from ament_index_python.packages import get_package_share_directory  # 获取包 share 路径
 from launch import LaunchDescription  # launch 描述容器
 from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription  # 传入 launch 参数、设置环境变量、引入其他 launch
+from launch.conditions import IfCondition  # 按 launch 参数决定是否启动节点
 from launch.launch_description_sources import PythonLaunchDescriptionSource  # 引入 Python launch 文件
 from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution  # 运行期参数取值、命令替换、拼路径
 from launch_ros.actions import Node  # 启动 ROS2 节点
@@ -20,6 +21,11 @@ ARGUMENTS = [
         'use_sim_time',
         default_value='true',
         description='Use sim time if true',
+    ),
+    DeclareLaunchArgument(
+        'rviz',
+        default_value='true',
+        description='Start RViz if true',
     ),
 ]
 
@@ -67,10 +73,14 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         arguments=[
-            '0.08', '0', '0.08',
-            '0', '0', '3.1415926',
-            'base_link',
-            'all_wheel/base_footprint/lidar_sensor',
+            '--x', '0.08',
+            '--y', '0',
+            '--z', '0.08',
+            '--roll', '0',
+            '--pitch', '0',
+            '--yaw', '3.1415926',
+            '--frame-id', 'base_link',
+            '--child-frame-id', 'all_wheel/base_footprint/lidar_sensor',
         ],
         parameters=[{'use_sim_time': use_sim_time}],
         output='screen'
@@ -147,7 +157,8 @@ def generate_launch_description():
             '-d',
             os.path.join(pkg_path, 'rviz', 'gz_sim.rviz'),
         ],
-        output='screen'
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('rviz'))
     )
 
     # Step 9: 把所有动作加入 LaunchDescription 并返回

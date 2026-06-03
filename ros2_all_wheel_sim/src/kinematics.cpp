@@ -142,14 +142,19 @@ private:
         rclcpp::Time current_time = this->get_clock()->now();
         double dt = (current_time - last_time).seconds();
         last_time = current_time;
+        if (dt <= 0.0) {
+          return;
+        }
         
         Eigen::Matrix2d rM;
         rM << cos(yaw), -sin(yaw),
               sin(yaw), cos(yaw);
         Eigen::MatrixXd dp = rM * tMI * w * dt;
         
-        pos_x += dp(0);
-        pos_y += dp(1);
+        pos_x -= dp(0);
+        pos_y -= dp(1);
+        vx = -dp(0) / dt;
+        vy = -dp(1) / dt;
         // RCLCPP_INFO(this->get_logger(), "%f %f %f %f %f", w1, w2, w3, vx, vy);
         publish_odom(current_time);
   }

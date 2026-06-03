@@ -23,7 +23,10 @@ def generate_launch_description():
             ])
     gazebo_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([gazebo_sim_path]),
-        launch_arguments={'world': LaunchConfiguration('world')}.items()
+        launch_arguments={
+            'world': LaunchConfiguration('world'),
+            'rviz': 'false',
+        }.items()
     )
 
     slam_toolbox_launch_path = PathJoinSubstitution([
@@ -32,7 +35,14 @@ def generate_launch_description():
     
     slam_toolbox_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([slam_toolbox_launch_path]),
-        launch_arguments={"use_sim_time": "true"}.items()
+        launch_arguments={
+            "use_sim_time": "true",
+            "slam_params_file": os.path.join(
+                get_package_share_directory(PACKAGE_NAME),
+                'config',
+                'slam_toolbox.yaml'
+            ),
+        }.items()
     )
 
     rviz_config_path = PathJoinSubstitution([
