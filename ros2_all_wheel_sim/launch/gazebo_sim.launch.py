@@ -76,15 +76,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    static_odom_tf = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        arguments=['0','0','0','0','0','0','odom','base_footprint'],
-        parameters=[{'use_sim_time': use_sim_time}],
-        output='screen'
-    )
-
-
     # Step 3: 启动 Gazebo
     gazebo_launch_path = PathJoinSubstitution([
         get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'
@@ -167,7 +158,6 @@ def generate_launch_description():
     ld.add_action(gz_resource_path)
     ld.add_action(node_robot_state_publisher)
     ld.add_action(static_lidar_tf)
-    ld.add_action(static_odom_tf)
     ld.add_action(gazebo)
     ld.add_action(spawn_robot)
     ld.add_action(ros_gz_bridge)
