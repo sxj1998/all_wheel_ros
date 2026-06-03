@@ -43,6 +43,14 @@ def generate_launch_description():
         name='GZ_SIM_RESOURCE_PATH',
         value=resource_paths
     )
+    qt_platform = SetEnvironmentVariable(
+        name='QT_QPA_PLATFORM',
+        value='xcb'
+    )
+    software_gl = SetEnvironmentVariable(
+        name='LIBGL_ALWAYS_SOFTWARE',
+        value='1'
+    )
 
     # Step 2: 生成 robot_description 并启动 robot_state_publisher
     xacro_file = os.path.join(pkg_path, 'urdf', 'all_wheel', 'ALL_WHEEL.urdf')
@@ -144,11 +152,17 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         name='rviz2',
+        arguments=[
+            '-d',
+            os.path.join(pkg_path, 'rviz', 'gz_sim.rviz'),
+        ],
         output='screen'
     )
 
     # Step 9: 把所有动作加入 LaunchDescription 并返回
     ld = LaunchDescription(ARGUMENTS)
+    ld.add_action(qt_platform)
+    ld.add_action(software_gl)
     ld.add_action(ign_resource_path)
     ld.add_action(gz_resource_path)
     ld.add_action(node_robot_state_publisher)
