@@ -35,18 +35,6 @@ add_executable(kinematics src/kinematics.cpp)
 ament_target_dependencies(kinematics ${KINEMATICS_DEPENDENCIES})
 install(TARGETS kinematics DESTINATION lib/${PROJECT_NAME})
 
-# install selected python code
-# install(PROGRAMS scripts/subscriber.py
-#         DESTINATION lib/${PROJECT_NAME})
-
-# install all python code inside scripts folder and add exec permission
-install(DIRECTORY scripts/
-        DESTINATION lib/${PROJECT_NAME}
-        FILE_PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
-                         GROUP_EXECUTE GROUP_READ
-                         WORLD_EXECUTE WORLD_READ
-        FILES_MATCHING PATTERN "*.py")
-
 install(DIRECTORY
   launch
   urdf
@@ -54,7 +42,7 @@ install(DIRECTORY
   worlds
   meshes
   config
-  map
+  maps
   DESTINATION share/${PROJECT_NAME}/
 )
 

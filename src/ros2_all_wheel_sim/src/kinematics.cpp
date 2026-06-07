@@ -121,7 +121,7 @@ private:
   }
 
   void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg) {
-    Eigen::VectorXd M = calculate_motor_speed(msg->linear.x, msg->linear.y, -msg->angular.z);
+    Eigen::VectorXd M = calculate_motor_speed(-msg->linear.x, -msg->linear.y, -msg->angular.z);
     set_motor_speed(M);
   }
 

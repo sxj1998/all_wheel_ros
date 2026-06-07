@@ -1,7 +1,7 @@
 import os  # 读取环境变量
 from ament_index_python.packages import get_package_share_directory  # 获取包 share 路径
 from launch import LaunchDescription  # launch 描述容器
-from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription  # 传入 launch 参数、设置环境变量、引入其他 launch
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription, TimerAction  # 传入 launch 参数、设置环境变量、引入其他 launch
 from launch.conditions import IfCondition  # 按 launch 参数决定是否启动节点
 from launch.launch_description_sources import PythonLaunchDescriptionSource  # 引入 Python launch 文件
 from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution  # 运行期参数取值、命令替换、拼路径
@@ -94,9 +94,12 @@ def generate_launch_description():
         PythonLaunchDescriptionSource([gazebo_launch_path]),
         launch_arguments=[
             ('gz_args', [
+                os.path.join(pkg_path, 'worlds'),
+                '/',
                 LaunchConfiguration('world'),
                 '.sdf',
                 ' -r',
+                ' -s',
                 ' -v 4'
             ])
         ]
@@ -170,9 +173,8 @@ def generate_launch_description():
     ld.add_action(node_robot_state_publisher)
     ld.add_action(static_lidar_tf)
     ld.add_action(gazebo)
-    ld.add_action(spawn_robot)
     ld.add_action(ros_gz_bridge)
-    ld.add_action(spawn_wheel_controller)
-    ld.add_action(kinematics)
+    ld.add_action(TimerAction(period=3.0, actions=[spawn_robot]))
+    ld.add_action(TimerAction(period=6.0, actions=[spawn_wheel_controller, kinematics]))
     ld.add_action(rviz_node)
     return ld

@@ -2,6 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import TimerAction, IncludeLaunchDescription, DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution, LaunchConfiguration
 from launch_ros.actions import Node
@@ -12,6 +13,12 @@ ARGUMENTS = [
     DeclareLaunchArgument('world', 
                           default_value="maze2",
                           description='Gazebo World'),
+    DeclareLaunchArgument('map',
+                          default_value="maze2",
+                          description='Map name in the maps directory'),
+    DeclareLaunchArgument('rviz',
+                          default_value='true',
+                          description='Start RViz if true'),
 ]
 
 def generate_launch_description():
@@ -21,7 +28,10 @@ def generate_launch_description():
             ])
     gazebo_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([gazebo_sim_path]),
-        launch_arguments={'world': LaunchConfiguration('world')}.items()
+        launch_arguments={
+            'world': LaunchConfiguration('world'),
+            'rviz': LaunchConfiguration('rviz'),
+        }.items()
     )
 
     nav2_launch_path = PathJoinSubstitution([
@@ -30,7 +40,7 @@ def generate_launch_description():
 
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([nav2_launch_path]),
-        launch_arguments={'world': LaunchConfiguration('world')}.items()
+        launch_arguments={'map': LaunchConfiguration('map')}.items()
     )
 
     delayed_nav2 = TimerAction(
@@ -47,7 +57,8 @@ def generate_launch_description():
             name='rviz2',
             output='screen',
             arguments=['-d', rviz_config_path],
-            parameters=[{'use_sim_time': True}]
+            parameters=[{'use_sim_time': True}],
+            condition=IfCondition(LaunchConfiguration('rviz')),
         )
     
     # Create launch description and add actions
