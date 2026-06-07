@@ -83,11 +83,15 @@ def generate_launch_description():
             parameters=[{'use_sim_time': True}],
             condition=IfCondition(LaunchConfiguration('debug_rviz')),
         )
+
+    delayed_rviz = TimerAction(
+        period=8.0,
+        actions=[rviz2, debug_rviz2]
+    )
     
     # Create launch description and add actions
     ld = LaunchDescription(ARGUMENTS)
     ld.add_action(gazebo_sim)
     ld.add_action(delayed_nav2)
-    ld.add_action(rviz2)
-    ld.add_action(debug_rviz2)
+    ld.add_action(delayed_rviz)
     return ld
