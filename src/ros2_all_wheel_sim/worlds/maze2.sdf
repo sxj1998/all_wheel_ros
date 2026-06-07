@@ -8,12 +8,11 @@
       <specular>0.2 0.2 0.2 1</specular>
       <direction>-0.5 0.1 -0.9</direction>
       <cast_shadows>true</cast_shadows>
-      <diffuse>0.8 0.8 0.8 0.1</diffuse>
     </light>
 
     <scene>
       <ambient>0.99 0.99 0.99 1</ambient> <!-- Moderate ambient for visible shadows -->
-      <background>0.0 0.0 0.0 1</background>
+      <background>0.78 0.86 0.94 1</background>
       <shadows>true</shadows>
     </scene>
 
