@@ -1,8 +1,9 @@
-# Documentation
+# 文档
 
-This directory stores project notes, generated frame graphs, and usage documents.
+本目录存放项目说明、生成的 TF frame 图和使用文档。
 
-- `frames/`: TF frame graph snapshots.
-- `structure.md`: directory layout and maintenance notes.
-- `nav2_omni_navigation_fix.md`: Nav2 all-wheel straight-line navigation fix notes.
-- `navigation_camera_behavior.md`: camera direction, target yaw, and rotate-then-drive navigation notes.
+- `frames/`: TF frame 图快照。
+- `structure.md`: 目录结构和维护说明。
+- `topics.md`: 仿真、运动学、SLAM、Nav2 和 RViz 使用到的 ROS 2 topic 清单。
+- `nav2_omni_navigation_fix.md`: Nav2 全向轮直线导航修复说明。
+- `navigation_camera_behavior.md`: 相机方向、目标 yaw 和“先旋转后前进”的导航说明。
