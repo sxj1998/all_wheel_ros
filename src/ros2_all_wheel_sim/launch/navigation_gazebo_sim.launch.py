@@ -19,6 +19,9 @@ ARGUMENTS = [
     DeclareLaunchArgument('rviz',
                           default_value='true',
                           description='Start RViz if true'),
+    DeclareLaunchArgument('headless',
+                          default_value='false',
+                          description='Start Gazebo server only if true'),
 ]
 
 def generate_launch_description():
@@ -31,6 +34,7 @@ def generate_launch_description():
         launch_arguments={
             'world': LaunchConfiguration('world'),
             'rviz': LaunchConfiguration('rviz'),
+            'headless': LaunchConfiguration('headless'),
         }.items()
     )
 

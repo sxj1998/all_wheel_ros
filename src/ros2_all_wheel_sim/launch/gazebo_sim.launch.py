@@ -4,7 +4,7 @@ from launch import LaunchDescription  # launch 描述容器
 from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription, TimerAction  # 传入 launch 参数、设置环境变量、引入其他 launch
 from launch.conditions import IfCondition  # 按 launch 参数决定是否启动节点
 from launch.launch_description_sources import PythonLaunchDescriptionSource  # 引入 Python launch 文件
-from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution  # 运行期参数取值、命令替换、拼路径
+from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution, PythonExpression  # 运行期参数取值、命令替换、拼路径
 from launch_ros.actions import Node  # 启动 ROS2 节点
 from launch_ros.parameter_descriptions import ParameterValue  # 强制参数类型
 from pathlib import Path  # 路径处理
@@ -26,6 +26,11 @@ ARGUMENTS = [
         'rviz',
         default_value='true',
         description='Start RViz if true',
+    ),
+    DeclareLaunchArgument(
+        'headless',
+        default_value='false',
+        description='Start Gazebo server only if true',
     ),
 ]
 
@@ -99,7 +104,7 @@ def generate_launch_description():
                 LaunchConfiguration('world'),
                 '.sdf',
                 ' -r',
-                ' -s',
+                PythonExpression(["' -s' if '", LaunchConfiguration('headless'), "' == 'true' else ''"]),
                 ' -v 4'
             ])
         ]
