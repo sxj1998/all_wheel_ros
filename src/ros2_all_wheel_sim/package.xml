@@ -27,7 +27,6 @@
   <exec_depend>joint_state_broadcaster</exec_depend>
   <exec_depend>velocity_controllers</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
-  <exec_depend>cartographer_ros</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>python3</exec_depend>

@@ -1,7 +1,0 @@
-image: all_wheel_slam_fixed.pgm
-mode: trinary
-resolution: 0.05
-origin: [-3.94, -0.79, 0]
-negate: 0
-occupied_thresh: 0.65
-free_thresh: 0.25

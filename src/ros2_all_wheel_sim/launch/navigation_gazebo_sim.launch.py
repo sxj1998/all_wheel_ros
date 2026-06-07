@@ -14,11 +14,17 @@ ARGUMENTS = [
                           default_value="maze2",
                           description='Gazebo World'),
     DeclareLaunchArgument('map',
-                          default_value="maze2",
+                          default_value="my_slam_map",
                           description='Map name in the maps directory'),
-    DeclareLaunchArgument('rviz',
+    DeclareLaunchArgument('nav_rviz',
                           default_value='true',
-                          description='Start RViz if true'),
+                          description='Start navigation RViz if true'),
+    DeclareLaunchArgument('debug_rviz',
+                          default_value='true',
+                          description='Start laser/TF debug RViz if true'),
+    DeclareLaunchArgument('sim_rviz',
+                          default_value='false',
+                          description='Start Gazebo-only RViz if true'),
     DeclareLaunchArgument('headless',
                           default_value='false',
                           description='Start Gazebo server only if true'),
@@ -33,7 +39,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource([gazebo_sim_path]),
         launch_arguments={
             'world': LaunchConfiguration('world'),
-            'rviz': LaunchConfiguration('rviz'),
+            'rviz': LaunchConfiguration('sim_rviz'),
             'headless': LaunchConfiguration('headless'),
         }.items()
     )
@@ -48,7 +54,7 @@ def generate_launch_description():
     )
 
     delayed_nav2 = TimerAction(
-        period=5.0,
+        period=10.0,
         actions=[nav2_launch]
     )
 
@@ -62,7 +68,20 @@ def generate_launch_description():
             output='screen',
             arguments=['-d', rviz_config_path],
             parameters=[{'use_sim_time': True}],
-            condition=IfCondition(LaunchConfiguration('rviz')),
+            condition=IfCondition(LaunchConfiguration('nav_rviz')),
+        )
+
+    debug_rviz_config_path = PathJoinSubstitution([
+                get_package_share_directory(PACKAGE_NAME), 'rviz', 'laser_tf.rviz'
+            ])
+    debug_rviz2 = Node(
+            package='rviz2',
+            executable='rviz2',
+            name='laser_tf_rviz2',
+            output='screen',
+            arguments=['-d', debug_rviz_config_path],
+            parameters=[{'use_sim_time': True}],
+            condition=IfCondition(LaunchConfiguration('debug_rviz')),
         )
     
     # Create launch description and add actions
@@ -70,4 +89,5 @@ def generate_launch_description():
     ld.add_action(gazebo_sim)
     ld.add_action(delayed_nav2)
     ld.add_action(rviz2)
+    ld.add_action(debug_rviz2)
     return ld

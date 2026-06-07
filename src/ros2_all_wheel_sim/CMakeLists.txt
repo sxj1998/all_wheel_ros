@@ -16,10 +16,6 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
-add_executable(test_cpp_publisher src/test_publisher.cpp)
-ament_target_dependencies(test_cpp_publisher rclcpp std_msgs)
-install(TARGETS test_cpp_publisher DESTINATION lib/${PROJECT_NAME})
-
 set(KINEMATICS_DEPENDENCIES
   rclcpp
   std_msgs
