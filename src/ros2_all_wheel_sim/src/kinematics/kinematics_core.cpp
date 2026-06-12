@@ -1,4 +1,4 @@
-#include "ros2_all_wheel_sim/kinematics_core.hpp"
+#include "ros2_all_wheel_sim/kinematics/kinematics_core.hpp"
 
 #include <cmath>
 #include <stdexcept>

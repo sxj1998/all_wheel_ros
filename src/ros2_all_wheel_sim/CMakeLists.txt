@@ -45,7 +45,7 @@ set(NAV2_PLUGIN_DEPENDENCIES
   pluginlib
 )
 
-add_library(kinematics_core src/kinematics_core.cpp)
+add_library(kinematics_core src/kinematics/kinematics_core.cpp)
 target_include_directories(kinematics_core
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -53,7 +53,7 @@ target_include_directories(kinematics_core
 )
 target_link_libraries(kinematics_core PUBLIC Eigen3::Eigen)
 
-add_executable(kinematics src/kinematics.cpp)
+add_executable(kinematics src/kinematics/kinematics.cpp)
 target_link_libraries(kinematics kinematics_core)
 ament_target_dependencies(kinematics ${KINEMATICS_DEPENDENCIES})
 target_include_directories(kinematics PRIVATE include)
