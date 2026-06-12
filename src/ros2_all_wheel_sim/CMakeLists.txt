@@ -7,6 +7,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(Eigen3 REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -27,9 +28,28 @@ set(KINEMATICS_DEPENDENCIES
   tf2_geometry_msgs
 )
 
+add_library(kinematics_core src/kinematics_core.cpp)
+target_include_directories(kinematics_core
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(kinematics_core PUBLIC Eigen3::Eigen)
+
 add_executable(kinematics src/kinematics.cpp)
+target_link_libraries(kinematics kinematics_core)
 ament_target_dependencies(kinematics ${KINEMATICS_DEPENDENCIES})
-install(TARGETS kinematics DESTINATION lib/${PROJECT_NAME})
+target_include_directories(kinematics PRIVATE include)
+
+install(
+  TARGETS kinematics_core kinematics
+  EXPORT export_kinematics_core
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY include/ DESTINATION include)
 
 install(DIRECTORY
   launch
@@ -53,5 +73,8 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+ament_export_targets(export_kinematics_core HAS_LIBRARY_TARGET)
+ament_export_include_directories(include)
 
 ament_package()
