@@ -11,6 +11,12 @@ ARGUMENTS = [
     DeclareLaunchArgument('map',
                           default_value='maze2',
                           description='Map name in the maps directory'),
+    DeclareLaunchArgument('use_composition',
+                          default_value='False',
+                          description='Run Nav2 servers as separate processes if false'),
+    DeclareLaunchArgument('log_level',
+                          default_value='info',
+                          description='Nav2 log level'),
 ]
 
 def generate_launch_description():
@@ -26,7 +32,9 @@ def generate_launch_description():
         launch_arguments={
             "map": map_path,
             "params_file": param_file_path,
-            "use_sim_time": 'true'}.items()
+            "use_sim_time": 'true',
+            "use_composition": LaunchConfiguration("use_composition"),
+            "log_level": LaunchConfiguration("log_level")}.items()
     )
     
     ld = LaunchDescription(ARGUMENTS)

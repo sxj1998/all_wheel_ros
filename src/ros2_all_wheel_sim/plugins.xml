@@ -1,0 +1,8 @@
+<library path="custom_nav2_global_planner">
+  <class
+    name="ros2_all_wheel_sim/AStarGlobalPlanner"
+    type="ros2_all_wheel_sim::global_planner::AStarGlobalPlanner"
+    base_class_type="nav2_core::GlobalPlanner">
+    <description>A simple A* global planner using the Nav2 global costmap.</description>
+  </class>
+</library>

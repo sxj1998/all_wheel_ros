@@ -16,6 +16,10 @@ find_package(sensor_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(nav2_core REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
+find_package(nav2_util REQUIRED)
+find_package(pluginlib REQUIRED)
 
 set(KINEMATICS_DEPENDENCIES
   rclcpp
@@ -26,6 +30,19 @@ set(KINEMATICS_DEPENDENCIES
   tf2
   tf2_ros
   tf2_geometry_msgs
+)
+
+set(NAV2_PLUGIN_DEPENDENCIES
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  nav2_core
+  nav2_costmap_2d
+  nav2_util
+  pluginlib
 )
 
 add_library(kinematics_core src/kinematics_core.cpp)
@@ -41,12 +58,27 @@ target_link_libraries(kinematics kinematics_core)
 ament_target_dependencies(kinematics ${KINEMATICS_DEPENDENCIES})
 target_include_directories(kinematics PRIVATE include)
 
+add_library(custom_nav2_global_planner SHARED
+  src/global_planner/astar_global_planner.cpp
+)
+target_include_directories(custom_nav2_global_planner
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(custom_nav2_global_planner ${NAV2_PLUGIN_DEPENDENCIES})
+pluginlib_export_plugin_description_file(nav2_core plugins.xml)
+
 install(
-  TARGETS kinematics_core kinematics
+  TARGETS kinematics_core kinematics custom_nav2_global_planner
   EXPORT export_kinematics_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+install(FILES plugins.xml
+  DESTINATION share/${PROJECT_NAME}
 )
 
 install(DIRECTORY include/ DESTINATION include)

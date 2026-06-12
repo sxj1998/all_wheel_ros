@@ -1,7 +1,9 @@
 import os
+from datetime import datetime
+from pathlib import Path
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import TimerAction, IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import TimerAction, IncludeLaunchDescription, DeclareLaunchArgument, SetEnvironmentVariable
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution, LaunchConfiguration
@@ -28,9 +30,27 @@ ARGUMENTS = [
     DeclareLaunchArgument('headless',
                           default_value='false',
                           description='Start Gazebo server only if true'),
+    DeclareLaunchArgument('nav2_use_composition',
+                          default_value='False',
+                          description='Run Nav2 servers as separate processes if false'),
+    DeclareLaunchArgument('nav2_log_level',
+                          default_value='info',
+                          description='Nav2 log level'),
+    DeclareLaunchArgument('log_dir',
+                          default_value=os.environ.get(
+                              'ROS_LOG_DIR',
+                              str(Path.home() / 'work' / 'ROS2' / 'logs' /
+                                  ('navigation_' + datetime.now().strftime('%Y%m%d_%H%M%S')))
+                          ),
+                          description='Directory used by ROS nodes for log files'),
 ]
 
 def generate_launch_description():
+    ros_log_dir = SetEnvironmentVariable(
+        name='ROS_LOG_DIR',
+        value=LaunchConfiguration('log_dir')
+    )
+
     # launch gazebo with spawned robot
     gazebo_sim_path = PathJoinSubstitution([
                 get_package_share_directory(PACKAGE_NAME), 'launch', 'gazebo_sim.launch.py'
@@ -50,7 +70,11 @@ def generate_launch_description():
 
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([nav2_launch_path]),
-        launch_arguments={'map': LaunchConfiguration('map')}.items()
+        launch_arguments={
+            'map': LaunchConfiguration('map'),
+            'use_composition': LaunchConfiguration('nav2_use_composition'),
+            'log_level': LaunchConfiguration('nav2_log_level'),
+        }.items()
     )
 
     delayed_nav2 = TimerAction(
@@ -91,6 +115,7 @@ def generate_launch_description():
     
     # Create launch description and add actions
     ld = LaunchDescription(ARGUMENTS)
+    ld.add_action(ros_log_dir)
     ld.add_action(gazebo_sim)
     ld.add_action(delayed_nav2)
     ld.add_action(delayed_rviz)
