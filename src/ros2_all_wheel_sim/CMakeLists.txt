@@ -5,6 +5,8 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+option(ASTAR_TRACE_POINTS "Enable verbose A* planner point trace logs" OFF)
+
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -67,6 +69,10 @@ target_include_directories(custom_nav2_global_planner
     $<INSTALL_INTERFACE:include>
 )
 ament_target_dependencies(custom_nav2_global_planner ${NAV2_PLUGIN_DEPENDENCIES})
+target_compile_definitions(custom_nav2_global_planner
+  PRIVATE
+    $<$<BOOL:${ASTAR_TRACE_POINTS}>:ASTAR_TRACE_POINTS=1>
+)
 pluginlib_export_plugin_description_file(nav2_core plugins.xml)
 
 install(
