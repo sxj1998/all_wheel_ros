@@ -633,6 +633,11 @@ OmniLocalPlanner::SimState OmniLocalPlanner::simulateStep(
  * 该实现检查机器人中心点所在栅格，并依赖 costmap inflation layer 提供安全缓冲。
  * 如果状态落在 costmap 外部，会按碰撞处理，避免规划器驶出局部地图范围。
  *
+ * 注意：膨胀层中的高代价区域不应全部视为硬碰撞。否则机器人离墙仍有一段距离时，
+ * 轨迹会因为 cost 超过 obstacle_threshold_ 被整体丢弃，表现为“贴墙前卡住”。
+ * 因此这里仅把 INSCRIBED/LETHAL 级别视为碰撞，普通膨胀代价只进入 obstacle_score，
+ * 交给轨迹评分去偏好更远离障碍的候选速度。
+ *
  * @param state 待检查的仿真状态。
  * @param obstacle_score 输出归一化障碍代价，范围约为 [0, 1]。
  * @return true 表示碰撞或不可通行；false 表示可通行。
@@ -654,12 +659,13 @@ bool OmniLocalPlanner::stateInCollision(const SimState & state, double & obstacl
   if (cost == nav2_costmap_2d::NO_INFORMATION) {
     return !allow_unknown_;
   }
-  if (cost >= obstacle_threshold_) {
+  if (cost >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
     return true;
   }
 
-  obstacle_score = static_cast<double>(cost) /
+  const double normalized_cost = static_cast<double>(cost) /
     static_cast<double>(std::max(1, static_cast<int>(obstacle_threshold_)));
+  obstacle_score = std::clamp(normalized_cost, 0.0, 1.0);
   return false;
 }
 
