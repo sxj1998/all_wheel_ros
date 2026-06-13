@@ -89,7 +89,8 @@ private:
     const std::vector<geometry_msgs::msg::PoseStamped> & local_plan,
     const geometry_msgs::msg::PoseStamped & target_pose,
     const geometry_msgs::msg::PoseStamped & goal_pose,
-    double target_yaw) const;
+    double target_yaw,
+    double target_speed) const;
   SimState simulateStep(const SimState & state, const VelocitySample & velocity, double dt) const;
   bool stateInCollision(const SimState & state, double & obstacle_score) const;
   double distanceToPlan(

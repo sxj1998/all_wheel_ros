@@ -16,6 +16,17 @@ namespace ros2_all_wheel_sim
 namespace local_planner
 {
 
+/**
+ * @brief 配置全向局部规划器插件。
+ *
+ * 该函数由 Nav2 controller_server 在 lifecycle configure 阶段调用，负责保存 node、
+ * TF、局部代价地图等运行上下文，并声明、读取、校验 DWA 采样规划相关参数。
+ *
+ * @param parent Nav2 lifecycle node 弱引用。
+ * @param name 插件实例名，当前通常为 FollowPath。
+ * @param tf TF buffer，用于把全局路径点转换到控制器当前坐标系。
+ * @param costmap_ros Nav2 局部代价地图封装对象。
+ */
 void OmniLocalPlanner::configure(
   const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
   std::string name,
@@ -150,18 +161,28 @@ void OmniLocalPlanner::configure(
   desired_linear_vel_ = std::max(0.0, desired_linear_vel_);
   max_linear_vel_ = std::max(0.0, max_linear_vel_);
   max_lateral_vel_ = std::max(0.0, max_lateral_vel_);
-  max_angular_vel_ = std::max(0.0, max_angular_vel_);
+  max_angular_vel_ = std::max(0.01, max_angular_vel_);
   min_linear_vel_ = std::clamp(min_linear_vel_, -max_linear_vel_, max_linear_vel_);
   min_lateral_vel_ = std::clamp(min_lateral_vel_, -max_lateral_vel_, max_lateral_vel_);
   min_angular_vel_ = std::clamp(min_angular_vel_, -max_angular_vel_, max_angular_vel_);
   acc_lim_x_ = std::max(0.01, acc_lim_x_);
   acc_lim_y_ = std::max(0.01, acc_lim_y_);
   acc_lim_theta_ = std::max(0.01, acc_lim_theta_);
+  min_approach_linear_vel_ = std::clamp(min_approach_linear_vel_, 0.0, max_linear_vel_);
   sim_time_ = std::max(0.2, sim_time_);
   sim_step_ = std::clamp(sim_step_, 0.02, sim_time_);
   controller_period_ = std::max(0.01, controller_period_);
   lookahead_dist_ = std::max(0.05, lookahead_dist_);
   approach_dist_ = std::max(0.05, approach_dist_);
+  xy_goal_tolerance_ = std::max(0.0, xy_goal_tolerance_);
+  yaw_goal_tolerance_ = std::max(0.0, yaw_goal_tolerance_);
+  transform_tolerance_ = std::max(0.0, transform_tolerance_);
+  path_distance_weight_ = std::max(0.0, path_distance_weight_);
+  target_distance_weight_ = std::max(0.0, target_distance_weight_);
+  goal_distance_weight_ = std::max(0.0, goal_distance_weight_);
+  obstacle_weight_ = std::max(0.0, obstacle_weight_);
+  heading_weight_ = std::max(0.0, heading_weight_);
+  velocity_weight_ = std::max(0.0, velocity_weight_);
   min_trans_vel_ = std::max(0.0, min_trans_vel_);
   rotate_to_heading_min_angle_ = std::max(0.0, rotate_to_heading_min_angle_);
   rotate_to_heading_angular_vel_ = std::clamp(
@@ -176,27 +197,62 @@ void OmniLocalPlanner::configure(
     name_.c_str(), costmap_frame_.c_str(), sim_time_, vx_samples_, vy_samples_, vtheta_samples_);
 }
 
+/**
+ * @brief 清理局部规划器资源。
+ *
+ * 当前插件没有额外动态资源需要释放，仅清空缓存的全局路径以避免停用后继续使用旧路径。
+ */
 void OmniLocalPlanner::cleanup()
 {
   RCLCPP_INFO(logger_, "Cleaning up %s", name_.c_str());
   global_plan_.poses.clear();
 }
 
+/**
+ * @brief 激活局部规划器。
+ *
+ * 当前实现没有 publisher、timer 等 lifecycle 资源，仅记录状态切换日志。
+ */
 void OmniLocalPlanner::activate()
 {
   RCLCPP_INFO(logger_, "Activating %s", name_.c_str());
 }
 
+/**
+ * @brief 停用局部规划器。
+ *
+ * 当前实现没有 publisher、timer 等 lifecycle 资源，仅记录状态切换日志。
+ */
 void OmniLocalPlanner::deactivate()
 {
   RCLCPP_INFO(logger_, "Deactivating %s", name_.c_str());
 }
 
+/**
+ * @brief 接收并缓存全局路径。
+ *
+ * Nav2 每次获得新的全局路径后会调用该函数，computeVelocityCommands() 后续会围绕
+ * 这条路径寻找最近点、前瞻点并生成局部速度命令。
+ *
+ * @param path 全局规划器生成的路径。
+ */
 void OmniLocalPlanner::setPlan(const nav_msgs::msg::Path & path)
 {
   global_plan_ = path;
 }
 
+/**
+ * @brief 计算下一周期速度命令。
+ *
+ * 这是 Nav2 Controller 插件的核心入口。函数采用轻量 DWA 思路：在当前速度附近按照
+ * 加速度约束采样 vx、vy、wz，对每组速度做短时前向仿真，过滤碰撞轨迹，并根据贴近
+ * 路径、接近前瞻点、接近终点、远离障碍、朝向误差和速度目标综合打分。
+ *
+ * @param pose 当前机器人位姿。
+ * @param velocity 当前机器人速度。
+ * @param goal_checker Nav2 目标检查器，可为空。
+ * @return geometry_msgs::msg::TwistStamped 本周期输出的底盘速度命令。
+ */
 geometry_msgs::msg::TwistStamped OmniLocalPlanner::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped & pose,
   const geometry_msgs::msg::Twist & velocity,
@@ -241,6 +297,7 @@ geometry_msgs::msg::TwistStamped OmniLocalPlanner::computeVelocityCommands(
     }
   }
 
+  // 前进模式下先让车头对准路径切线，避免大角度侧滑或背向跟踪。
   const double heading_error = normalizedAngle(target_yaw - poseYaw(pose));
   if (use_forward_only_ &&
     distance_to_goal > xy_goal_tolerance_ &&
@@ -263,21 +320,26 @@ geometry_msgs::msg::TwistStamped OmniLocalPlanner::computeVelocityCommands(
     velocity.linear.y + acc_lim_y_ * controller_period_);
   const double min_wz = std::max(min_angular_vel_, velocity.angular.z - acc_lim_theta_ * controller_period_);
   const double max_wz = std::min(max_angular_vel_, velocity.angular.z + acc_lim_theta_ * controller_period_);
+  const auto vx_values = sampleRange(min_vx, max_vx, vx_samples_);
+  const auto vy_values = sampleRange(min_vy, max_vy, vy_samples_);
+  const auto wz_values = sampleRange(min_wz, max_wz, vtheta_samples_);
 
   TrajectoryScore best;
   best.score = std::numeric_limits<double>::infinity();
 
-  for (const double vx : sampleRange(min_vx, max_vx, vx_samples_)) {
-    for (const double vy : sampleRange(min_vy, max_vy, vy_samples_)) {
-      for (const double wz : sampleRange(min_wz, max_wz, vtheta_samples_)) {
+  for (const double vx : vx_values) {
+    for (const double vy : vy_values) {
+      for (const double wz : wz_values) {
         VelocitySample sample{vx, vy, wz};
         if (distance_to_goal <= xy_goal_tolerance_) {
+          // 已进入位置容差时只保留旋转自由度，用于最终姿态对齐。
           sample.vx = 0.0;
           sample.vy = 0.0;
         } else if (std::hypot(sample.vx, sample.vy) < min_trans_vel_) {
           continue;
         }
-        const auto score = scoreTrajectory(pose, sample, local_plan, target_pose, goal_pose, target_yaw);
+        const auto score = scoreTrajectory(
+          pose, sample, local_plan, target_pose, goal_pose, target_yaw, target_speed);
         if (score.valid && score.score < best.score) {
           best = score;
         }
@@ -302,12 +364,28 @@ geometry_msgs::msg::TwistStamped OmniLocalPlanner::computeVelocityCommands(
   return cmd;
 }
 
+/**
+ * @brief 设置外部速度限制。
+ *
+ * Nav2 speed filter 或其他上层模块可通过该接口限制局部规划器输出速度。
+ *
+ * @param speed_limit 速度上限；percentage 为 true 时表示百分比。
+ * @param percentage true 表示 speed_limit 是 max_linear_vel_ 的百分比。
+ */
 void OmniLocalPlanner::setSpeedLimit(const double & speed_limit, const bool & percentage)
 {
   active_speed_limit_ = speed_limit;
   speed_limit_is_percentage_ = percentage;
 }
 
+/**
+ * @brief 查找当前位姿在全局路径上的最近点索引。
+ *
+ * 路径点会先转换到当前 pose 的坐标系，再计算二维距离，避免不同 frame 下直接比较。
+ *
+ * @param pose 当前机器人位姿。
+ * @return 最近路径点索引；若转换全部失败则返回 0。
+ */
 std::size_t OmniLocalPlanner::nearestPathIndex(
   const geometry_msgs::msg::PoseStamped & pose) const
 {
@@ -329,6 +407,14 @@ std::size_t OmniLocalPlanner::nearestPathIndex(
   return nearest_index;
 }
 
+/**
+ * @brief 从最近点开始沿路径寻找前瞻点索引。
+ *
+ * 前瞻点用于引导短期局部轨迹，不直接盯最终目标，能让机器人沿路径逐段跟踪。
+ *
+ * @param nearest_index 当前最近路径点索引。
+ * @return 距离最近点约 lookahead_dist_ 的路径点索引。
+ */
 std::size_t OmniLocalPlanner::lookaheadPathIndex(std::size_t nearest_index) const
 {
   double accumulated_distance = 0.0;
@@ -342,6 +428,16 @@ std::size_t OmniLocalPlanner::lookaheadPathIndex(std::size_t nearest_index) cons
   return index;
 }
 
+/**
+ * @brief 将位姿转换到指定坐标系。
+ *
+ * 如果输入已经在目标坐标系中则直接复制；否则使用 TF buffer 进行转换。
+ *
+ * @param input 输入位姿。
+ * @param target_frame 目标坐标系。
+ * @param output 输出位姿。
+ * @return true 转换成功；false 转换失败。
+ */
 bool OmniLocalPlanner::transformPose(
   const geometry_msgs::msg::PoseStamped & input,
   const std::string & target_frame,
@@ -362,6 +458,17 @@ bool OmniLocalPlanner::transformPose(
   }
 }
 
+/**
+ * @brief 判断机器人是否已经到达目标。
+ *
+ * 优先使用 Nav2 提供的 GoalChecker；若 GoalChecker 不可用或未判定到达，则使用本插件
+ * 的 xy/yaw 容差作为兜底判断。
+ *
+ * @param pose 当前机器人位姿。
+ * @param velocity 当前机器人速度。
+ * @param goal_checker Nav2 目标检查器，可为空。
+ * @return true 表示目标已到达。
+ */
 bool OmniLocalPlanner::isGoalReached(
   const geometry_msgs::msg::PoseStamped & pose,
   const geometry_msgs::msg::Twist & velocity,
@@ -380,6 +487,15 @@ bool OmniLocalPlanner::isGoalReached(
   return distance2D(pose, goal_pose) <= xy_goal_tolerance_ && yaw_error <= yaw_goal_tolerance_;
 }
 
+/**
+ * @brief 将从最近点到终点的全局路径转换到当前控制坐标系。
+ *
+ * 转换后的局部路径仅用于轨迹打分中的贴线距离计算。
+ *
+ * @param pose 当前机器人位姿，用于提供目标 frame。
+ * @param nearest_index 当前最近路径点索引。
+ * @return 已转换的局部路径点集合。
+ */
 std::vector<geometry_msgs::msg::PoseStamped> OmniLocalPlanner::transformPlan(
   const geometry_msgs::msg::PoseStamped & pose,
   std::size_t nearest_index) const
@@ -397,6 +513,16 @@ std::vector<geometry_msgs::msg::PoseStamped> OmniLocalPlanner::transformPlan(
   return local_plan;
 }
 
+/**
+ * @brief 在闭区间 [min_value, max_value] 上均匀采样。
+ *
+ * 当采样数不足或区间极小时返回区间中点，避免后续循环处理空数组。
+ *
+ * @param min_value 最小值。
+ * @param max_value 最大值。
+ * @param samples 采样数量。
+ * @return 采样结果。
+ */
 std::vector<double> OmniLocalPlanner::sampleRange(
   double min_value,
   double max_value,
@@ -416,13 +542,29 @@ std::vector<double> OmniLocalPlanner::sampleRange(
   return values;
 }
 
+/**
+ * @brief 前向仿真并计算候选速度轨迹得分。
+ *
+ * 函数会从当前位姿出发，以固定速度采样值积分 sim_time_ 秒。仿真过程中任一点发生
+ * 碰撞则轨迹无效；否则按照路径、目标、障碍、朝向和速度目标加权得到总分。
+ *
+ * @param pose 当前机器人位姿。
+ * @param velocity 待评估的速度采样。
+ * @param local_plan 当前坐标系下的局部路径。
+ * @param target_pose 前瞻目标点。
+ * @param goal_pose 最终目标点。
+ * @param target_yaw 期望朝向，通常为路径切线方向。
+ * @param target_speed 期望平移速度，接近终点时会降低。
+ * @return TrajectoryScore 轨迹有效性、总分和对应速度。
+ */
 OmniLocalPlanner::TrajectoryScore OmniLocalPlanner::scoreTrajectory(
   const geometry_msgs::msg::PoseStamped & pose,
   const VelocitySample & velocity,
   const std::vector<geometry_msgs::msg::PoseStamped> & local_plan,
   const geometry_msgs::msg::PoseStamped & target_pose,
   const geometry_msgs::msg::PoseStamped & goal_pose,
-  double target_yaw) const
+  double target_yaw,
+  double target_speed) const
 {
   TrajectoryScore result;
   result.velocity = velocity;
@@ -449,7 +591,7 @@ OmniLocalPlanner::TrajectoryScore OmniLocalPlanner::scoreTrajectory(
     state.x - goal_pose.pose.position.x,
     state.y - goal_pose.pose.position.y);
   const double heading_error = std::abs(normalizedAngle(target_yaw - state.yaw));
-  const double velocity_score = scoreVelocity(velocity.vx, velocity.vy, limitedSpeed());
+  const double velocity_score = scoreVelocity(velocity.vx, velocity.vy, target_speed);
 
   result.score =
     path_distance_weight_ * path_distance +
@@ -462,6 +604,17 @@ OmniLocalPlanner::TrajectoryScore OmniLocalPlanner::scoreTrajectory(
   return result;
 }
 
+/**
+ * @brief 使用全向底盘速度模型积分一个仿真步。
+ *
+ * vx、vy 表示机器人自身坐标系下的前向和横向速度，函数根据当前 yaw 将其转换到世界
+ * 坐标系并更新 x、y，同时积分角速度 wz。
+ *
+ * @param state 当前仿真状态。
+ * @param velocity 当前速度采样。
+ * @param dt 仿真步长，单位秒。
+ * @return 下一仿真状态。
+ */
 OmniLocalPlanner::SimState OmniLocalPlanner::simulateStep(
   const SimState & state,
   const VelocitySample & velocity,
@@ -474,6 +627,16 @@ OmniLocalPlanner::SimState OmniLocalPlanner::simulateStep(
   return next;
 }
 
+/**
+ * @brief 检查仿真状态是否与局部代价地图发生碰撞。
+ *
+ * 该实现检查机器人中心点所在栅格，并依赖 costmap inflation layer 提供安全缓冲。
+ * 如果状态落在 costmap 外部，会按碰撞处理，避免规划器驶出局部地图范围。
+ *
+ * @param state 待检查的仿真状态。
+ * @param obstacle_score 输出归一化障碍代价，范围约为 [0, 1]。
+ * @return true 表示碰撞或不可通行；false 表示可通行。
+ */
 bool OmniLocalPlanner::stateInCollision(const SimState & state, double & obstacle_score) const
 {
   obstacle_score = 0.0;
@@ -500,6 +663,16 @@ bool OmniLocalPlanner::stateInCollision(const SimState & state, double & obstacl
   return false;
 }
 
+/**
+ * @brief 计算仿真状态到局部路径的最近二维距离。
+ *
+ * 该距离用于鼓励候选轨迹贴近全局路径。如果局部路径为空，则返回 0，避免因 TF 转换
+ * 短时失败导致所有轨迹被额外惩罚。
+ *
+ * @param state 仿真状态。
+ * @param local_plan 当前坐标系下的局部路径。
+ * @return 到局部路径最近点的距离。
+ */
 double OmniLocalPlanner::distanceToPlan(
   const SimState & state,
   const std::vector<geometry_msgs::msg::PoseStamped> & local_plan) const
@@ -517,11 +690,30 @@ double OmniLocalPlanner::distanceToPlan(
   return nearest_distance;
 }
 
+/**
+ * @brief 计算速度目标代价。
+ *
+ * 候选速度模长越接近目标速度，代价越小。接近终点时 target_speed 会降低，从而鼓励
+ * 规划器自然减速。
+ *
+ * @param vx 机器人坐标系 x 方向速度。
+ * @param vy 机器人坐标系 y 方向速度。
+ * @param target_speed 期望平移速度。
+ * @return 速度偏差绝对值。
+ */
 double OmniLocalPlanner::scoreVelocity(double vx, double vy, double target_speed) const
 {
   return std::abs(target_speed - std::hypot(vx, vy));
 }
 
+/**
+ * @brief 计算当前生效的期望速度。
+ *
+ * 基础速度由 desired_linear_vel_ 和 max_linear_vel_ 共同限制；若外部设置了 speed limit，
+ * 则继续按绝对值或百分比限制。
+ *
+ * @return 当前速度上限下的期望平移速度。
+ */
 double OmniLocalPlanner::limitedSpeed() const
 {
   double speed = std::min(desired_linear_vel_, max_linear_vel_);
@@ -533,6 +725,17 @@ double OmniLocalPlanner::limitedSpeed() const
   return speed;
 }
 
+/**
+ * @brief 生成原地旋转速度命令。
+ *
+ * 当前进模式下车头与路径方向偏差过大时，先输出角速度对齐路径方向。角速度同样受
+ * 当前速度和角加速度限制约束，避免控制命令突变。
+ *
+ * @param header 输出速度命令使用的 header。
+ * @param heading_error 目标朝向与当前朝向的误差。
+ * @param velocity 当前机器人速度。
+ * @return 原地旋转速度命令。
+ */
 geometry_msgs::msg::TwistStamped OmniLocalPlanner::rotateCommand(
   const std_msgs::msg::Header & header,
   double heading_error,
@@ -556,6 +759,14 @@ geometry_msgs::msg::TwistStamped OmniLocalPlanner::rotateCommand(
   return cmd;
 }
 
+/**
+ * @brief 生成零速度命令。
+ *
+ * 用于无路径、已到达目标、TF 失败或无有效轨迹等需要安全停车的场景。
+ *
+ * @param header 输出速度命令使用的 header。
+ * @return 线速度和角速度均为 0 的速度命令。
+ */
 geometry_msgs::msg::TwistStamped OmniLocalPlanner::zeroCommand(
   const std_msgs::msg::Header & header) const
 {
@@ -565,6 +776,12 @@ geometry_msgs::msg::TwistStamped OmniLocalPlanner::zeroCommand(
   return cmd;
 }
 
+/**
+ * @brief 从 PoseStamped 的四元数姿态中提取 yaw。
+ *
+ * @param pose 输入位姿。
+ * @return yaw 角，单位弧度。
+ */
 double OmniLocalPlanner::poseYaw(const geometry_msgs::msg::PoseStamped & pose) const
 {
   tf2::Quaternion quaternion(
@@ -579,6 +796,12 @@ double OmniLocalPlanner::poseYaw(const geometry_msgs::msg::PoseStamped & pose) c
   return yaw;
 }
 
+/**
+ * @brief 将角度归一化到 [-pi, pi]。
+ *
+ * @param angle 输入角度，单位弧度。
+ * @return 归一化后的角度。
+ */
 double OmniLocalPlanner::normalizedAngle(double angle) const
 {
   while (angle > M_PI) {
@@ -590,6 +813,13 @@ double OmniLocalPlanner::normalizedAngle(double angle) const
   return angle;
 }
 
+/**
+ * @brief 计算两个位姿之间的二维欧氏距离。
+ *
+ * @param a 第一个位姿。
+ * @param b 第二个位姿。
+ * @return x-y 平面距离。
+ */
 double OmniLocalPlanner::distance2D(
   const geometry_msgs::msg::PoseStamped & a,
   const geometry_msgs::msg::PoseStamped & b) const
