@@ -73,10 +73,21 @@ target_compile_definitions(custom_nav2_global_planner
   PRIVATE
     $<$<BOOL:${ASTAR_TRACE_POINTS}>:ASTAR_TRACE_POINTS=1>
 )
+
+add_library(custom_nav2_local_planner SHARED
+  src/local_planner/omni_local_planner.cpp
+)
+target_include_directories(custom_nav2_local_planner
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(custom_nav2_local_planner ${NAV2_PLUGIN_DEPENDENCIES})
+
 pluginlib_export_plugin_description_file(nav2_core plugins.xml)
 
 install(
-  TARGETS kinematics_core kinematics custom_nav2_global_planner
+  TARGETS kinematics_core kinematics custom_nav2_global_planner custom_nav2_local_planner
   EXPORT export_kinematics_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

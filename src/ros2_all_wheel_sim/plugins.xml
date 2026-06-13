@@ -6,3 +6,11 @@
     <description>A simple A* global planner using the Nav2 global costmap.</description>
   </class>
 </library>
+<library path="custom_nav2_local_planner">
+  <class
+    name="ros2_all_wheel_sim/OmniLocalPlanner"
+    type="ros2_all_wheel_sim::local_planner::OmniLocalPlanner"
+    base_class_type="nav2_core::Controller">
+    <description>A lightweight holonomic local planner for the all-wheel robot.</description>
+  </class>
+</library>
