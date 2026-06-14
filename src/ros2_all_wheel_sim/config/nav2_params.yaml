@@ -119,13 +119,13 @@ controller_server:
       yaw_goal_tolerance: 0.08
     FollowPath:
       plugin: "ros2_all_wheel_sim/OmniLocalPlanner"
-      desired_linear_vel: 0.35
-      max_linear_vel: 0.45
-      max_lateral_vel: 0.08
-      max_angular_vel: 1.2
+      desired_linear_vel: 0.70
+      max_linear_vel: 0.90
+      max_lateral_vel: 0.16
+      max_angular_vel: 2.4
       min_linear_vel: 0.0
-      min_lateral_vel: -0.08
-      min_angular_vel: -1.2
+      min_lateral_vel: -0.16
+      min_angular_vel: -2.4
       acc_lim_x: 2.5
       acc_lim_y: 2.5
       acc_lim_theta: 3.2
@@ -150,7 +150,7 @@ controller_server:
       min_trans_vel: 0.05
       use_forward_only: true
       rotate_to_heading_min_angle: 0.6
-      rotate_to_heading_angular_vel: 0.8
+      rotate_to_heading_angular_vel: 1.6
       allow_unknown: false
       obstacle_threshold: 220
       trace_enabled: true
@@ -435,8 +435,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    max_velocity: [0.5, 0.5, 2.5]
-    min_velocity: [-0.5, -0.5, -2.5]
+    max_velocity: [1.0, 1.0, 5.0]
+    min_velocity: [-1.0, -1.0, -5.0]
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
     max_accel: [2.5, 2.5, 3.2]
