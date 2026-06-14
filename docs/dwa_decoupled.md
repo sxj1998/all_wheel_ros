@@ -1,9 +1,14 @@
-# Decoupled DWA Planner
+# Decoupled Planners
 
-The DWA implementation is split into two layers:
+The local DWA implementation is split into two layers:
 
 - `ros2_all_wheel_sim/local_planner/dwa_core.hpp`: pure C++ planner data types and algorithm. It does not include ROS, Nav2, TF, or costmap headers.
 - `ros2_all_wheel_sim/local_planner/omni_local_planner.hpp`: Nav2 controller plugin adapter. It converts ROS messages to `dwa_core` data and provides a costmap query callback.
+
+The global A* implementation follows the same split:
+
+- `ros2_all_wheel_sim/global_planner/astar_core.hpp`: pure C++ grid-map A* planner. It does not include ROS, Nav2, TF, or costmap headers.
+- `ros2_all_wheel_sim/global_planner/astar_global_planner.hpp`: Nav2 global planner adapter. It copies the Nav2 costmap into `astar_core` data and converts the result to `nav_msgs::msg::Path`.
 
 ## Build
 

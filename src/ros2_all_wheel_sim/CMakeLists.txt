@@ -59,7 +59,16 @@ target_include_directories(kinematics_core
 target_link_libraries(kinematics_core PUBLIC Eigen3::Eigen)
 
 add_library(dwa_core src/local_planner/dwa_core.cpp)
+set_target_properties(dwa_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(dwa_core
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+add_library(astar_core src/global_planner/astar_core.cpp)
+set_target_properties(astar_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(astar_core
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -78,6 +87,7 @@ target_include_directories(custom_nav2_global_planner
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+target_link_libraries(custom_nav2_global_planner astar_core)
 ament_target_dependencies(custom_nav2_global_planner ${NAV2_PLUGIN_DEPENDENCIES})
 target_compile_definitions(custom_nav2_global_planner
   PRIVATE
@@ -103,6 +113,7 @@ install(
     kinematics_core
     kinematics
     dwa_core
+    astar_core
     custom_nav2_global_planner
     custom_nav2_local_planner
   EXPORT export_kinematics_core
