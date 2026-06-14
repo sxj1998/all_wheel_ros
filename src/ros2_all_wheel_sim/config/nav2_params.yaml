@@ -153,6 +153,13 @@ controller_server:
       rotate_to_heading_angular_vel: 0.8
       allow_unknown: false
       obstacle_threshold: 220
+      trace_enabled: true
+      trace_directory: "/tmp/ros2_all_wheel_dwa_trace"
+      trace_every_n: 1
+      trace_candidate_stride: 8
+      trace_candidate_state_stride: 2
+      trace_costmap_stride: 3
+      trace_cost_threshold: 253
     enable_stamped_cmd_vel: false
 
 local_costmap:

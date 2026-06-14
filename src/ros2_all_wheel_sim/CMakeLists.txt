@@ -5,6 +5,9 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 option(ASTAR_TRACE_POINTS "Enable verbose A* planner point trace logs" OFF)
 
 # find dependencies
@@ -55,6 +58,13 @@ target_include_directories(kinematics_core
 )
 target_link_libraries(kinematics_core PUBLIC Eigen3::Eigen)
 
+add_library(dwa_core src/local_planner/dwa_core.cpp)
+target_include_directories(dwa_core
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
 add_executable(kinematics src/kinematics/kinematics.cpp)
 target_link_libraries(kinematics kinematics_core)
 ament_target_dependencies(kinematics ${KINEMATICS_DEPENDENCIES})
@@ -75,6 +85,7 @@ target_compile_definitions(custom_nav2_global_planner
 )
 
 add_library(custom_nav2_local_planner SHARED
+  src/local_planner/dwa_trace_logger.cpp
   src/local_planner/omni_local_planner.cpp
 )
 target_include_directories(custom_nav2_local_planner
@@ -82,12 +93,18 @@ target_include_directories(custom_nav2_local_planner
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+target_link_libraries(custom_nav2_local_planner dwa_core)
 ament_target_dependencies(custom_nav2_local_planner ${NAV2_PLUGIN_DEPENDENCIES})
 
 pluginlib_export_plugin_description_file(nav2_core plugins.xml)
 
 install(
-  TARGETS kinematics_core kinematics custom_nav2_global_planner custom_nav2_local_planner
+  TARGETS
+    kinematics_core
+    kinematics
+    dwa_core
+    custom_nav2_global_planner
+    custom_nav2_local_planner
   EXPORT export_kinematics_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -108,6 +125,7 @@ install(DIRECTORY
   meshes
   config
   maps
+  scripts
   DESTINATION share/${PROJECT_NAME}/
 )
 
