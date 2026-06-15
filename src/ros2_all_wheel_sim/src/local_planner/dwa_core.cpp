@@ -110,10 +110,11 @@ PlanResult Planner::plan(const PlanInput & input, const CostQueryCallback & cost
   }
 
   /**
-   * 前进模式下，朝向偏差过大时先旋转对齐路径切线。
+   * 朝向偏差过大时先原地旋转对齐路径切线。
+   * 这让全向底盘在窄通道转向时少做贴墙平移，转向也更干脆。
    */
   const double heading_error = normalizeAngle(result.target_yaw - input.pose.yaw);
-  if (config_.use_forward_only &&
+  if (config_.rotate_to_heading_enabled &&
     distance_to_goal > config_.xy_goal_tolerance &&
     std::abs(heading_error) > config_.rotate_to_heading_min_angle)
   {

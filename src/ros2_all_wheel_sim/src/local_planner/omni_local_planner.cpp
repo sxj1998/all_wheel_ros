@@ -101,6 +101,9 @@ void OmniLocalPlanner::configure(
     node, name_ + ".rotate_to_heading_angular_vel",
     rclcpp::ParameterValue(rotate_to_heading_angular_vel_));
   nav2_util::declare_parameter_if_not_declared(
+    node, name_ + ".rotate_to_heading_enabled",
+    rclcpp::ParameterValue(rotate_to_heading_enabled_));
+  nav2_util::declare_parameter_if_not_declared(
     node, name_ + ".use_forward_only", rclcpp::ParameterValue(use_forward_only_));
   nav2_util::declare_parameter_if_not_declared(
     node, name_ + ".vx_samples", rclcpp::ParameterValue(vx_samples_));
@@ -158,6 +161,7 @@ void OmniLocalPlanner::configure(
   node->get_parameter(name_ + ".min_trans_vel", min_trans_vel_);
   node->get_parameter(name_ + ".rotate_to_heading_min_angle", rotate_to_heading_min_angle_);
   node->get_parameter(name_ + ".rotate_to_heading_angular_vel", rotate_to_heading_angular_vel_);
+  node->get_parameter(name_ + ".rotate_to_heading_enabled", rotate_to_heading_enabled_);
   node->get_parameter(name_ + ".use_forward_only", use_forward_only_);
   node->get_parameter(name_ + ".vx_samples", vx_samples_);
   node->get_parameter(name_ + ".vy_samples", vy_samples_);
@@ -479,6 +483,7 @@ dwa::Config OmniLocalPlanner::plannerConfigFromParameters() const
   config.min_trans_vel = min_trans_vel_;
   config.rotate_to_heading_min_angle = rotate_to_heading_min_angle_;
   config.rotate_to_heading_angular_vel = rotate_to_heading_angular_vel_;
+  config.rotate_to_heading_enabled = rotate_to_heading_enabled_;
   config.vx_samples = vx_samples_;
   config.vy_samples = vy_samples_;
   config.vtheta_samples = vtheta_samples_;

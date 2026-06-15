@@ -13,7 +13,9 @@ option(ASTAR_TRACE_POINTS "Enable verbose A* planner point trace logs" OFF)
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -23,6 +25,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
+find_package(nav2_msgs REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(pluginlib REQUIRED)
 
@@ -48,6 +51,17 @@ set(NAV2_PLUGIN_DEPENDENCIES
   nav2_costmap_2d
   nav2_util
   pluginlib
+)
+
+set(EXPLORATION_DEPENDENCIES
+  action_msgs
+  rclcpp
+  rclcpp_action
+  geometry_msgs
+  nav_msgs
+  nav2_msgs
+  tf2
+  tf2_ros
 )
 
 add_library(kinematics_core src/kinematics/kinematics_core.cpp)
@@ -78,6 +92,10 @@ add_executable(kinematics src/kinematics/kinematics.cpp)
 target_link_libraries(kinematics kinematics_core)
 ament_target_dependencies(kinematics ${KINEMATICS_DEPENDENCIES})
 target_include_directories(kinematics PRIVATE include)
+
+add_executable(frontier_explorer src/exploration/frontier_explorer.cpp)
+ament_target_dependencies(frontier_explorer ${EXPLORATION_DEPENDENCIES})
+target_include_directories(frontier_explorer PRIVATE include)
 
 add_library(custom_nav2_global_planner SHARED
   src/global_planner/astar_global_planner.cpp
@@ -112,6 +130,7 @@ install(
   TARGETS
     kinematics_core
     kinematics
+    frontier_explorer
     dwa_core
     astar_core
     custom_nav2_global_planner

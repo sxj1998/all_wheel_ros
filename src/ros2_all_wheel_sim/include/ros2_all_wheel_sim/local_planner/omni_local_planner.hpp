@@ -360,6 +360,11 @@ private:
   double rotate_to_heading_angular_vel_{0.8};
 
   /**
+   * @brief true 表示大角度偏航时先原地对齐路径方向。
+   */
+  bool rotate_to_heading_enabled_{true};
+
+  /**
    * @brief 当前外部速度限制。
    */
   double active_speed_limit_{0.0};
@@ -385,7 +390,7 @@ private:
   bool speed_limit_is_percentage_{false};
 
   /**
-   * @brief true 表示大角度偏航时先对齐路径方向。
+   * @brief true 表示不允许倒车。
    */
   bool use_forward_only_{true};
 

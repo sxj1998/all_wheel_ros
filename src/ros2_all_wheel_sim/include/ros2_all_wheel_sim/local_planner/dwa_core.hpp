@@ -174,6 +174,7 @@ struct Config
 
   double rotate_to_heading_min_angle{0.35};
   double rotate_to_heading_angular_vel{0.8};
+  bool rotate_to_heading_enabled{true};
 
   /**
    * @brief 前向速度采样数。
@@ -191,7 +192,7 @@ struct Config
   int vtheta_samples{15};
 
   /**
-   * @brief true 时大角度先原地对齐路径切线。
+   * @brief true 时不允许倒车；与原地转向触发相互独立。
    */
   bool use_forward_only{true};
 };

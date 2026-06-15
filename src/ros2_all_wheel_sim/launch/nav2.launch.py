@@ -14,6 +14,9 @@ ARGUMENTS = [
     DeclareLaunchArgument('use_composition',
                           default_value='False',
                           description='Run Nav2 servers as separate processes if false'),
+    DeclareLaunchArgument('slam',
+                          default_value='False',
+                          description='Run Nav2 with SLAM instead of a saved map'),
     DeclareLaunchArgument('log_level',
                           default_value='info',
                           description='Nav2 log level'),
@@ -32,6 +35,7 @@ def generate_launch_description():
         launch_arguments={
             "map": map_path,
             "params_file": param_file_path,
+            "slam": LaunchConfiguration("slam"),
             "use_sim_time": 'true',
             "use_composition": LaunchConfiguration("use_composition"),
             "log_level": LaunchConfiguration("log_level")}.items()
