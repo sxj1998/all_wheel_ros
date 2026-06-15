@@ -28,6 +28,13 @@ namespace ros2_all_wheel_sim
 namespace exploration
 {
 
+/**
+ * @brief 基于 frontier 的自主探索节点。
+ *
+ * 该节点订阅 SLAM 输出的 OccupancyGrid，从已知自由栅格与未知栅格的边界中
+ * 提取 frontier，筛选可达且安全的导航目标，并通过 Nav2 的规划与导航 action
+ * 驱动机器人逐步探索未知区域。探索结束后可调用 map_saver 保存地图。
+ */
 class FrontierExplorer : public rclcpp::Node
 {
 public:
@@ -37,6 +44,12 @@ public:
   using GoalHandlePlan = rclcpp_action::ClientGoalHandle<ComputePathToPose>;
   using SaveMap = nav2_msgs::srv::SaveMap;
 
+  /**
+   * @brief 创建 frontier 探索节点并初始化 ROS 通信接口。
+   *
+   * 构造函数会读取探索参数，订阅地图，创建 Nav2 action 客户端、
+   * 地图保存客户端以及周期性规划定时器。
+   */
   FrontierExplorer()
   : Node("frontier_explorer"),
     tf_buffer_(this->get_clock()),
@@ -77,12 +90,21 @@ public:
   }
 
 private:
+  /**
+   * @brief 二维世界坐标点。
+   */
   struct Point
   {
-    double x{0.0};
-    double y{0.0};
+    double x{0.0};  ///< map 坐标系下的 x 坐标，单位米。
+    double y{0.0};  ///< map 坐标系下的 y 坐标，单位米。
   };
 
+  /**
+   * @brief 周期性探索入口。
+   *
+   * 每次触发时检查地图、动作状态和 Nav2 服务状态。如果当前没有正在执行
+   * 的目标，则从地图中选择一个新的 frontier 目标并先进行规划预检。
+   */
   void tick()
   {
     if (!map_ || completed_) {
@@ -126,6 +148,12 @@ private:
     preflightGoal(*goal, *robot);
   }
 
+  /**
+   * @brief 处理当前地图中没有可达 frontier 的情况。
+   *
+   * 探索尚未开始时只打印等待信息；探索开始后连续多轮找不到可达 frontier，
+   * 则认为建图完成并尝试保存地图。
+   */
   void handleNoReachableFrontier()
   {
     if (!exploration_started_) {
@@ -145,6 +173,9 @@ private:
     saveMap();
   }
 
+  /**
+   * @brief 调用 Nav2 map_saver 保存当前地图。
+   */
   void saveMap()
   {
     if (!auto_save_map_) {
@@ -186,6 +217,11 @@ private:
       });
   }
 
+  /**
+   * @brief 从 TF 中读取机器人在地图坐标系下的位置。
+   *
+   * @return 成功时返回机器人位置；TF 尚未就绪时返回 std::nullopt。
+   */
   std::optional<Point> robotPosition()
   {
     try {
@@ -198,6 +234,12 @@ private:
     }
   }
 
+  /**
+   * @brief 从当前地图中选择一个最合适的 frontier 导航目标。
+   *
+   * @param robot 机器人当前在 map 坐标系下的位置。
+   * @return 可达且安全的目标点；没有候选目标时返回 std::nullopt。
+   */
   std::optional<Point> chooseFrontierGoal(const Point & robot) const
   {
     const auto width = static_cast<int>(map_->info.width);
@@ -231,9 +273,8 @@ private:
           continue;
         }
 
-        // Larger frontiers are useful, but nearby frontiers keep exploration responsive.
-        // The small candidate penalty keeps the cluster-center candidate preferred when it is valid,
-        // while still allowing edge/corner candidates to recover partially explored rooms.
+        // 较大的 frontier 通常能带来更多信息，较近的 frontier 能减少无效绕行。
+        // 候选序号惩罚让簇中心优先，同时保留边缘/角落候选以补齐局部房间。
         const double score =
           static_cast<double>(cluster.size()) - distance * 8.0 -
           static_cast<double>(candidate_index) * 0.25;
@@ -246,6 +287,15 @@ private:
     return best_goal;
   }
 
+  /**
+   * @brief 找出地图中所有 frontier 栅格。
+   *
+   * frontier 定义为：自身是已知自由栅格，且 8 邻域中至少有一个未知栅格。
+   *
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return frontier 栅格的一维索引集合。
+   */
   std::unordered_set<int> frontierCells(int width, int height) const
   {
     const auto & data = map_->data;
@@ -264,6 +314,14 @@ private:
     return cells;
   }
 
+  /**
+   * @brief 将相邻 frontier 栅格聚类。
+   *
+   * @param cells 待聚类的 frontier 栅格集合。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return frontier 连通簇列表。
+   */
   std::vector<std::vector<int>> clusterCells(
     const std::unordered_set<int> & cells, int width, int height) const
   {
@@ -291,6 +349,17 @@ private:
     return clusters;
   }
 
+  /**
+   * @brief 为一个 frontier 连通簇生成多个候选导航点。
+   *
+   * 原始 frontier 位于未知边界，直接导航容易贴墙或进入未知区域。该函数会把
+   * 候选点从未知区域反向偏移到已知自由区，再搜索满足安全距离的可站立栅格。
+   *
+   * @param cluster frontier 连通簇。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return 按靠近簇中心优先排序后的候选目标点。
+   */
   std::vector<Point> clusterGoalCandidates(
     const std::vector<int> & cluster, int width, int height) const
   {
@@ -312,8 +381,8 @@ private:
     safe_cells.reserve(cluster.size());
 
     for (const int frontier_cell : cluster) {
-      // A raw frontier cell lies on the unknown boundary and is often too close to a wall.
-      // Shift each candidate back into known free space, then deduplicate the resulting safe cells.
+      // 原始 frontier 位于未知边界，通常离墙或未知区域过近。
+      // 先向已知自由区回退，再去重得到最终可站立候选点。
       const auto stand_off_cell = offsetFromUnknown(frontier_cell, width, height);
       const auto safe_cell = nearestSafeCell(stand_off_cell, width, height);
       if (!safe_cell || !seen_safe_cells.insert(*safe_cell).second) {
@@ -339,6 +408,12 @@ private:
     return goals;
   }
 
+  /**
+   * @brief 使用 Nav2 全局规划器预检目标是否可规划。
+   *
+   * @param xy 候选目标点。
+   * @param robot 当前机器人位置，用于设置目标朝向。
+   */
   void preflightGoal(const Point & xy, const Point & robot)
   {
     ComputePathToPose::Goal goal;
@@ -378,6 +453,12 @@ private:
     planner_->async_send_goal(goal, options);
   }
 
+  /**
+   * @brief 向 Nav2 NavigateToPose action 发送探索目标。
+   *
+   * @param xy 探索目标点。
+   * @param robot 当前机器人位置，用于设置目标朝向。
+   */
   void sendGoal(const Point & xy, const Point & robot)
   {
     NavigateToPose::Goal goal;
@@ -415,6 +496,11 @@ private:
     navigator_->async_send_goal(goal, options);
   }
 
+  /**
+   * @brief 取消执行时间过长的导航目标。
+   *
+   * 超时目标会加入黑名单，避免短时间内反复选择同一片不可达区域。
+   */
   void cancelTimedOutGoal()
   {
     if (!active_goal_ || max_goal_duration_ <= 0.0) {
@@ -435,6 +521,9 @@ private:
     goal_handle_.reset();
   }
 
+  /**
+   * @brief 取消执行时间过长的规划预检请求。
+   */
   void cancelTimedOutPlan()
   {
     if (!active_goal_ || max_goal_duration_ <= 0.0) {
@@ -454,6 +543,9 @@ private:
     plan_handle_.reset();
   }
 
+  /**
+   * @brief 处理 action 请求已发送但长时间未返回 goal handle 的异常状态。
+   */
   void cancelPendingAction()
   {
     if (!active_goal_ || max_goal_duration_ <= 0.0) {
@@ -473,6 +565,13 @@ private:
     active_goal_.reset();
   }
 
+  /**
+   * @brief 生成 Nav2 使用的目标位姿消息。
+   *
+   * @param xy 目标位置，位于 map 坐标系。
+   * @param yaw 目标朝向，单位弧度。
+   * @return 带 frame_id 和时间戳的 PoseStamped 消息。
+   */
   geometry_msgs::msg::PoseStamped makePose(const Point & xy, double yaw) const
   {
     geometry_msgs::msg::PoseStamped pose;
@@ -490,6 +589,13 @@ private:
     return pose;
   }
 
+  /**
+   * @brief 将地图栅格坐标转换为世界坐标。
+   *
+   * @param x 栅格 x 坐标。
+   * @param y 栅格 y 坐标。
+   * @return 对应栅格中心点在 map 坐标系下的位置。
+   */
   Point mapToWorld(int x, int y) const
   {
     const auto & info = map_->info;
@@ -498,6 +604,14 @@ private:
       info.origin.position.y + (static_cast<double>(y) + 0.5) * info.resolution};
   }
 
+  /**
+   * @brief 将世界坐标转换为地图一维栅格索引。
+   *
+   * @param point map 坐标系下的点。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return 有效地图范围内的一维索引；越界时返回 std::nullopt。
+   */
   std::optional<int> worldToMap(const Point & point, int width, int height) const
   {
     const auto & info = map_->info;
@@ -509,6 +623,18 @@ private:
     return y * width + x;
   }
 
+  /**
+   * @brief 使用当前占据栅格快速判断目标在地图上是否连通可达。
+   *
+   * 该检查不替代 Nav2 全局规划，只用于在发送 action 前过滤明显不可达的
+   * frontier，减少撞墙区域和未知区域附近的无效目标。
+   *
+   * @param robot 机器人当前位置。
+   * @param goal 候选目标点。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return 机器人附近自由栅格与目标附近自由栅格连通时返回 true。
+   */
   bool isReachableOnMap(const Point & robot, const Point & goal, int width, int height) const
   {
     const auto robot_seed = worldToMap(robot, width, height);
@@ -548,6 +674,15 @@ private:
     return false;
   }
 
+  /**
+   * @brief 从种子栅格附近搜索最近的路径可通行栅格。
+   *
+   * @param seed 起始栅格索引。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @param search_radius 搜索半径，单位米。
+   * @return 最近的可通行栅格；没有找到时返回 std::nullopt。
+   */
   std::optional<int> nearestTraversableCell(
     int seed, int width, int height, double search_radius) const
   {
@@ -585,12 +720,29 @@ private:
     return best;
   }
 
+  /**
+   * @brief 判断栅格是否是已知自由空间。
+   *
+   * @param cell 一维栅格索引。
+   * @return 栅格占据值在自由阈值内时返回 true。
+   */
   bool isTraversableCell(int cell) const
   {
     const auto value = map_->data[cell];
     return value >= 0 && value <= free_threshold_;
   }
 
+  /**
+   * @brief 判断栅格是否满足路径通行要求。
+   *
+   * 除了自身必须是自由栅格，还要求周围指定半径内没有障碍，避免路径
+   * 被规划到贴墙区域。
+   *
+   * @param cell 一维栅格索引。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return 满足通行安全距离时返回 true。
+   */
   bool isPathTraversableCell(int cell, int width, int height) const
   {
     if (!isTraversableCell(cell)) {
@@ -620,6 +772,14 @@ private:
     return true;
   }
 
+  /**
+   * @brief 将 frontier 栅格沿远离未知区域的方向偏移。
+   *
+   * @param cell frontier 栅格索引。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return 偏移后的栅格索引。
+   */
   int offsetFromUnknown(int cell, int width, int height) const
   {
     const int x = cell % width;
@@ -649,6 +809,14 @@ private:
     return goal_y * width + goal_x;
   }
 
+  /**
+   * @brief 从种子栅格附近搜索最近的安全目标栅格。
+   *
+   * @param seed 起始栅格索引。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return 最近的安全目标栅格；没有找到时返回 std::nullopt。
+   */
   std::optional<int> nearestSafeCell(int seed, int width, int height) const
   {
     const int max_radius =
@@ -679,6 +847,16 @@ private:
     return best;
   }
 
+  /**
+   * @brief 判断栅格是否适合作为导航目标。
+   *
+   * 目标栅格必须是已知自由空间，并且在最小障碍物安全距离内没有障碍。
+   *
+   * @param cell 一维栅格索引。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return 满足目标安全条件时返回 true。
+   */
   bool isSafeGoalCell(int cell, int width, int height) const
   {
     const auto & data = map_->data;
@@ -708,6 +886,14 @@ private:
     return true;
   }
 
+  /**
+   * @brief 判断栅格 8 邻域是否接触未知区域。
+   *
+   * @param index 一维栅格索引。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return 任一邻居为未知栅格时返回 true。
+   */
   bool touchesUnknown(int index, int width, int height) const
   {
     const auto & data = map_->data;
@@ -719,6 +905,12 @@ private:
     return false;
   }
 
+  /**
+   * @brief 判断目标是否落在失败目标黑名单附近。
+   *
+   * @param xy 待检查目标点。
+   * @return 与任一黑名单点距离过近时返回 true。
+   */
   bool isBlacklisted(const Point & xy) const
   {
     return std::any_of(
@@ -728,6 +920,14 @@ private:
       });
   }
 
+  /**
+   * @brief 获取栅格的 8 邻域索引。
+   *
+   * @param index 当前栅格的一维索引。
+   * @param width 地图宽度，单位栅格。
+   * @param height 地图高度，单位栅格。
+   * @return 位于地图范围内的邻居索引。
+   */
   static std::vector<int> neighbors(int index, int width, int height)
   {
     const int x = index % width;
@@ -749,47 +949,54 @@ private:
     return output;
   }
 
+  /**
+   * @brief 计算两个世界坐标点之间的欧氏距离。
+   *
+   * @param a 第一个点。
+   * @param b 第二个点。
+   * @return 两点间距离，单位米。
+   */
   static double distanceBetween(const Point & a, const Point & b)
   {
     return std::hypot(a.x - b.x, a.y - b.y);
   }
 
-  std::string map_topic_;
-  std::string global_frame_;
-  std::string robot_frame_;
-  double plan_period_{2.0};
-  int min_frontier_size_{8};
-  int free_threshold_{20};
-  int occupied_threshold_{65};
-  double frontier_goal_offset_{0.35};
-  double goal_search_radius_{0.70};
-  double min_goal_obstacle_clearance_{0.30};
-  double path_obstacle_clearance_{0.30};
-  double goal_blacklist_radius_{0.45};
-  double goal_reached_radius_{0.35};
-  double max_goal_duration_{120.0};
-  int completion_idle_cycles_{8};
-  int no_reachable_cycles_{0};
-  bool auto_save_map_{true};
-  bool completed_{false};
-  bool exploration_started_{false};
-  std::string map_save_service_;
-  std::string map_save_path_;
+  std::string map_topic_;  ///< 订阅的占据栅格地图话题。
+  std::string global_frame_;  ///< 地图和导航目标所在的全局坐标系。
+  std::string robot_frame_;  ///< 用于 TF 查询的机器人底盘坐标系。
+  double plan_period_{2.0};  ///< 探索规划周期，单位秒。
+  int min_frontier_size_{8};  ///< frontier 连通簇的最小栅格数量。
+  int free_threshold_{20};  ///< 小于等于该值的栅格视为自由空间。
+  int occupied_threshold_{65};  ///< 大于等于该值的栅格视为障碍。
+  double frontier_goal_offset_{0.35};  ///< frontier 目标向已知自由区回退距离，单位米。
+  double goal_search_radius_{0.70};  ///< 从回退点搜索安全目标的半径，单位米。
+  double min_goal_obstacle_clearance_{0.30};  ///< 目标点周围最小障碍物间距，单位米。
+  double path_obstacle_clearance_{0.30};  ///< 连通性预检使用的路径安全间距，单位米。
+  double goal_blacklist_radius_{0.45};  ///< 失败目标黑名单影响半径，单位米。
+  double goal_reached_radius_{0.35};  ///< 小于该距离的候选目标视为已到达，单位米。
+  double max_goal_duration_{120.0};  ///< 单个目标或规划请求的最大耗时，单位秒。
+  int completion_idle_cycles_{8};  ///< 连续无可达 frontier 后判定探索完成的周期数。
+  int no_reachable_cycles_{0};  ///< 当前连续无可达 frontier 的周期计数。
+  bool auto_save_map_{true};  ///< 探索完成后是否自动保存地图。
+  bool completed_{false};  ///< 探索是否已经完成。
+  bool exploration_started_{false};  ///< 是否已经至少发送过一个导航目标。
+  std::string map_save_service_;  ///< Nav2 map_saver 服务名。
+  std::string map_save_path_;  ///< 地图保存路径前缀。
 
-  nav_msgs::msg::OccupancyGrid::SharedPtr map_;
-  std::vector<Point> blacklist_;
-  GoalHandleNavigate::SharedPtr goal_handle_;
-  GoalHandlePlan::SharedPtr plan_handle_;
-  std::optional<Point> active_goal_;
-  std::chrono::steady_clock::time_point goal_started_at_;
-  rclcpp::Client<SaveMap>::SharedPtr map_saver_;
+  nav_msgs::msg::OccupancyGrid::SharedPtr map_;  ///< 最近一次收到的占据栅格地图。
+  std::vector<Point> blacklist_;  ///< 失败或超时目标列表。
+  GoalHandleNavigate::SharedPtr goal_handle_;  ///< 当前导航 action 的 goal handle。
+  GoalHandlePlan::SharedPtr plan_handle_;  ///< 当前规划预检 action 的 goal handle。
+  std::optional<Point> active_goal_;  ///< 当前正在处理的探索目标。
+  std::chrono::steady_clock::time_point goal_started_at_;  ///< 当前目标开始处理的墙钟时间。
+  rclcpp::Client<SaveMap>::SharedPtr map_saver_;  ///< 地图保存服务客户端。
 
-  tf2_ros::Buffer tf_buffer_;
-  tf2_ros::TransformListener tf_listener_;
-  rclcpp_action::Client<NavigateToPose>::SharedPtr navigator_;
-  rclcpp_action::Client<ComputePathToPose>::SharedPtr planner_;
-  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
-  rclcpp::TimerBase::SharedPtr timer_;
+  tf2_ros::Buffer tf_buffer_;  ///< 用于查询 map 到 base_footprint 的 TF 缓冲区。
+  tf2_ros::TransformListener tf_listener_;  ///< TF 监听器。
+  rclcpp_action::Client<NavigateToPose>::SharedPtr navigator_;  ///< Nav2 导航 action 客户端。
+  rclcpp_action::Client<ComputePathToPose>::SharedPtr planner_;  ///< Nav2 全局规划 action 客户端。
+  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;  ///< 地图订阅器。
+  rclcpp::TimerBase::SharedPtr timer_;  ///< 周期性探索定时器。
 };
 
 }  // namespace exploration
